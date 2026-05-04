@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bot, Home, MessagesSquare, Settings } from "lucide-react"
+import { Bot, Home, MessagesSquare, Settings, Zap } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -10,6 +10,7 @@ const iconMap = {
     bot: Bot,
     messagesSquare: MessagesSquare,
     settings: Settings,
+    widgets: Zap
 }
 
 interface Props {

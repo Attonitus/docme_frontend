@@ -17,9 +17,14 @@ export const sidebarItems = [
         icon: "messagesSquare",
     },
     {
+        title: "Widgets",
+        href: "/widgets",
+        icon: "widgets"
+    },
+    {
         title: "Settings",
         href: "/settings",
         icon: "settings"
-    }
+    },
 
 ] as const

@@ -6,12 +6,13 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
+
     return (
         <div>
             <MobileSidebar />
             <Sidebar className="hidden lg:flex" />
-            <main className="bg-blue-400 pl-75 h-full pt-[50px] lg:pt-0">
-                <div className="max-w-6xl mx-auto pt-6 h-full">
+            <main className="bg-beige-100 lg:pl-75 h-full pt-[50px] lg:pt-0">
+                <div className="max-w-6xl mx-auto h-full">
                     {children}
                 </div>
             </main>

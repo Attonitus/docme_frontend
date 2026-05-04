@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Public_Sans } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Providers } from "@/providers/query-provider";
 
 
 const publicSans = Public_Sans({
@@ -25,7 +26,9 @@ export default function RootLayout({
       lang="en"
       className={cn("h-full", "antialiased", publicSans.variable)}
     >
-      <body>{children}</body>
+      <Providers>
+        <body>{children}</body>
+      </Providers>
     </html>
   );
 }
