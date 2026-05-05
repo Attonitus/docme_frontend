@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { useConversations, useStartConversation } from '@/features/useDocMe';
 import { api } from '@/lib/api.axios';
 import { Conversation } from '@/types/types';
@@ -19,8 +19,8 @@ interface ConversationsPanelProps {
   accentColor: string;
 }
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function formatTimeAgo(date: Date | string): string {
+  const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'ahora';
   if (mins < 60) return `${mins}m`;
@@ -41,6 +41,11 @@ export function ConversationsPanel({
   const startConversation = useStartConversation();
   const [search, setSearch] = useState('');
 
+  const deleteConversation = useMutation({
+    mutationFn: (convId: string) => api.delete(`/chat/conversations/${convId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations', botId] }),
+  });
+
   const conversations: Conversation[] = data?.data ?? [];
 
   const filtered = conversations.filter((c) => {
@@ -55,11 +60,9 @@ export function ConversationsPanel({
     onSelect(conv.id);
   };
 
-  const handleDelete = async (e: React.MouseEvent, convId: string) => {
+  const handleDelete = (e: React.MouseEvent, convId: string) => {
     e.stopPropagation();
-    await api.delete(`/chat/conversations/${convId}`);
-    qc.invalidateQueries({ queryKey: ['conversations', botId] });
-    // Si era la activa, deseleccionar
+    deleteConversation.mutate(convId);
     if (activeConversationId === convId) onSelect('');
   };
 
@@ -165,7 +168,7 @@ export function ConversationsPanel({
                         </span>
                         <span className="text-gray-200 dark:text-gray-700">·</span>
                         <span className="text-xs text-gray-400">
-                          {timeAgo(conv.createdAt.toString())}
+                          {formatTimeAgo(conv.createdAt)}
                         </span>
                       </div>
                     </div>

@@ -61,10 +61,10 @@ export const useDocuments = (botId: string) =>
 export const useUploadDocument = (botId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: async(file: File) => {
       const form = new FormData();
       form.append('file', file);
-      return api.post(`/bots/${botId}/documents`, form, {
+      return api.post(`/bots/${botId}/documents/upload`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then((r) => r.data);
     },

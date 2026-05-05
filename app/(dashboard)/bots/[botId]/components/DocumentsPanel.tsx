@@ -1,6 +1,6 @@
 'use client';
  
-import { useCallback, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   FileText, Upload, Trash2, CheckCircle2,
@@ -33,25 +33,31 @@ export function DocumentsPanel({ botId, accentColor }: DocumentsPanelProps) {
   const { data: documents, isLoading, refetch } = useDocuments(botId);
   const upload = useUploadDocument(botId);
   const remove = useDeleteDocument(botId);
- 
-  // Polling mientras haya documentos procesando
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     const processing = documents?.some(
       (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
     );
-    if (!processing) return;
-    const interval = setInterval(refetch, 3000);
-    return () => clearInterval(interval);
+    if (processing && !intervalRef.current) {
+      intervalRef.current = setInterval(refetch, 3000);
+    } else if (!processing && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [documents, refetch]);
  
-  const onDrop = useCallback(
-    async (files: File[]) => {
-      for (const file of files) {
-        await upload.mutateAsync(file);
-      }
-    },
-    [upload],
-  );
+  const onDrop = async (files: File[]) => {
+    for (const file of files) {
+      await upload.mutateAsync(file);
+    }
+  };
  
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
@@ -218,8 +224,8 @@ function DocumentItem({
         {isProcessing && (
           <div className="mt-1.5 h-1 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
             <div
-              className="h-full rounded-full animate-pulse"
-              style={{ width: '60%', backgroundColor: accentColor }}
+              className="h-full rounded-full animate-pulse w-full"
+              style={{ backgroundColor: accentColor }}
             />
           </div>
         )}

@@ -51,7 +51,10 @@ export function BotHeader({
             {bot.name}
           </p>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              totalDocs > 0 ? "bg-emerald-500" : "bg-gray-300"
+            )} />
             <span className="text-xs text-gray-400">
               {totalDocs} doc{totalDocs !== 1 ? 's' : ''} indexado{totalDocs !== 1 ? 's' : ''}
             </span>

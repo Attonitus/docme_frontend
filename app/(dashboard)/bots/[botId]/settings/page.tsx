@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
     ArrowLeft, Save, Loader2, Trash2,
-    Key, Plus, Copy, Check, Eye, EyeOff,
+    Key, Plus, Copy, Check,
     Bot, Sliders, Globe, Shield, AlertTriangle,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Card, CardContent, CardHeader,
@@ -32,7 +31,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { APIKey } from '@/types/types';
-import { useBot, useUpdateBot } from '@/features/useDocMe';
+import { useBot, useUpdateBot, useDeleteBot } from '@/features/useDocMe';
 import { api } from '@/lib/api.axios';
 import { Switch } from '@/components/ui/switch';
 
@@ -65,6 +64,16 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'api-keys', label: 'API Keys', icon: Key },
     { id: 'danger', label: 'Zona peligro', icon: Shield },
 ];
+
+function formatTimeAgo(date: Date | string | null | undefined): string {
+    if (!date) return 'Nunca';
+    const now = Date.now();
+    const diff = now - new Date(date).getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days < 1) return 'Hoy';
+    if (days === 1) return 'Ayer';
+    return `Hace ${days} días`;
+}
 
 // ─────────────────────────────────────────────────────
 // Página principal
@@ -264,7 +273,7 @@ export default function BotSettingsPage({
 
                                             <div className="space-y-1.5">
                                                 <Label>Máx. tokens <span className="text-gray-400">({watch('maxTokens')})</span></Label>
-                                                <Input type="number" min={256} max={4096} {...register('maxTokens')} />
+                                                <Input type="number" min={256} max={4096} {...register('maxTokens', { valueAsNumber: true })} />
                                                 <p className="text-xs text-gray-400">256 – 4096</p>
                                             </div>
                                         </div>
@@ -277,7 +286,7 @@ export default function BotSettingsPage({
                                             <input
                                                 type="range"
                                                 min={0} max={2} step={0.1}
-                                                {...register('temperature')}
+                                                {...register('temperature', { valueAsNumber: true })}
                                                 className="w-full accent-indigo-600"
                                             />
                                             <div className="flex justify-between text-xs text-gray-400">
@@ -420,15 +429,6 @@ function ApiKeysTab({ botId }: { botId: string }) {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const timeAgo = (dateStr?: string) => {
-        if (!dateStr) return 'Nunca';
-        const diff = Date.now() - new Date(dateStr).getTime();
-        const days = Math.floor(diff / 86400000);
-        if (days < 1) return 'Hoy';
-        if (days === 1) return 'Ayer';
-        return `Hace ${days} días`;
-    };
-
     return (
         <Card>
             <CardHeader>
@@ -505,7 +505,7 @@ function ApiKeysTab({ botId }: { botId: string }) {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{key.label}</p>
                                     <p className="text-xs text-gray-400 mt-0.5">
-                                        Último uso: {timeAgo(key.lastUsedAt.toDateString())} · Creada {timeAgo(key.createdAt.toDateString())}
+                                        Último uso: {formatTimeAgo(key.lastUsedAt)} · Creada {formatTimeAgo(key.createdAt)}
                                     </p>
                                 </div>
                                 <Button
@@ -573,21 +573,17 @@ function DangerZoneTab({ botId, botName }: { botId: string; botName: string }) {
     const [confirm, setConfirm] = useState('');
     const [showDialog, setShowDialog] = useState(false);
 
-    const deleteBot = useMutation({
-        mutationFn: () => api.delete(`/bots/${botId}`).then((r) => r.data),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['bots'] });
-            router.replace('/bots');
-        },
-    });
+    const deleteBot = useDeleteBot();
 
     const clearDocs = useMutation({
-        mutationFn: () =>
-            api.get(`/bots/${botId}/documents`).then(async (r) => {
-                for (const doc of r.data) {
-                    await api.delete(`/bots/${botId}/documents/${doc.id}`);
-                }
-            }),
+        mutationFn: async () => {
+            const { data: docs } = await api.get(`/bots/${botId}/documents`);
+            await Promise.all(
+                docs.map((doc: { id: string }) =>
+                    api.delete(`/bots/${botId}/documents/${doc.id}`)
+                )
+            );
+        },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['documents', botId] });
         },
@@ -682,7 +678,7 @@ function DangerZoneTab({ botId, botName }: { botId: string; botName: string }) {
                             <Button
                                 variant="destroy"
                                 disabled={confirm !== botName || deleteBot.isPending}
-                                onClick={() => deleteBot.mutate()}
+                                onClick={() => deleteBot.mutate(botId, { onSuccess: () => router.replace('/bots') })}
                                 className="gap-2"
                             >
                                 {deleteBot.isPending && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -1,8 +1,10 @@
 'use client';
 
 import { use, useState } from 'react';
-
+import { useRouter } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { useBot, useChatHistory, useDocuments, useStartConversation } from '@/features/useDocMe';
 import { BotHeader } from './components/BotHeader';
 import { ChatPanel } from './components/ChatPanel';
@@ -15,7 +17,8 @@ export default function BotPage({
     params: Promise<{ botId: string }>;
 }) {
     const { botId } = use(params);
-    const { data: bot, isLoading } = useBot(botId);
+    const router = useRouter();
+    const { data: bot, isLoading, isError } = useBot(botId);
     const { data: documents } = useDocuments(botId);
     const startConversation = useStartConversation();
 
@@ -31,8 +34,12 @@ export default function BotPage({
 
     const handleNewChat = async () => {
         if (!bot) return;
-        const conv = await startConversation.mutateAsync(bot.id);
-        setConversationId(conv.id);
+        try {
+            const conv = await startConversation.mutateAsync(bot.id);
+            setConversationId(conv.id);
+        } catch {
+            // error handled by startConversation.isPending state
+        }
     };
 
     if (isLoading) {
@@ -48,7 +55,26 @@ export default function BotPage({
         );
     }
 
-    if (!bot) return null;
+    if (!bot) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen gap-4 text-center">
+                <div className="h-20 w-20 rounded-2xl bg-red-50 dark:bg-red-950 flex items-center justify-center">
+                    <AlertCircle className="h-10 w-10 text-red-400" />
+                </div>
+                <div>
+                    <p className="font-semibold text-foreground">
+                        {isError ? 'Error loading bot' : 'Bot not found'}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        {isError ? 'Something went wrong.' : 'This bot does not exist.'}
+                    </p>
+                </div>
+                <Button variant="secondary" onClick={() => router.push('/bots')}>
+                    Back to bots
+                </Button>
+            </div>
+        );
+    }
 
     const pendingDocs =
         documents?.filter(
@@ -126,13 +152,13 @@ function EmptyChat({ bot, onStart }: { bot: { name: string; primaryColor: string
                 <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{bot.name}</h2>
                 <p className="text-sm text-gray-400 mt-1 max-w-xs">{bot.welcomeMessage}</p>
             </div>
-            <button
+            <Button
                 onClick={onStart}
-                className="px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-90"
+                className="px-5 py-2.5 rounded-xl text-sm font-medium"
                 style={{ backgroundColor: bot.primaryColor }}
             >
                 Iniciar nueva conversación
-            </button>
+            </Button>
             <p className="text-xs text-gray-300 dark:text-gray-600">
                 O selecciona una conversación anterior en el panel izquierdo
             </p>

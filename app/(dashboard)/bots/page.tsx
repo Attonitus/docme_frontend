@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus, MoreVertical, MessageSquare,
-  FileText, Zap, Bot, Loader2,
+  FileText, Zap, Bot, Loader2, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +45,7 @@ function getBotStatus(bot: BotType): keyof typeof STATUS_CONFIG {
 
 export default function BotsPage() {
   const router = useRouter();
-  const { data: bots, isLoading } = useBots();
+  const { data: bots, isLoading, isError } = useBots();
   const createBot = useCreateBot();
   const deleteBot = useDeleteBot();
   const [showCreate, setShowCreate] = useState(false);
@@ -54,11 +54,14 @@ export default function BotsPage() {
     useForm<CreateForm>({ resolver: zodResolver(createSchema) });
 
   const onSubmit = async (data: CreateForm) => {
-
-    const bot = await createBot.mutateAsync(data);
-    reset();
-    setShowCreate(false);
-    router.push(`/bots/${bot.id}`);
+    try {
+      const bot = await createBot.mutateAsync(data);
+      reset();
+      setShowCreate(false);
+      router.push(`/bots/${bot.id}`);
+    } catch {
+      // el error se muestra via createBot.isError
+    }
   };
 
   return (
@@ -67,7 +70,7 @@ export default function BotsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">My Bots</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {bots?.length ?? 0} bot{bots?.length !== 1 ? 's' : ''} created{bots?.length !== 1 ? 's' : ''}
+            {bots?.length ?? 0} bot{(bots?.length ?? 0) !== 1 ? 's' : ''} created
           </p>
         </div>
         <Button onClick={() => setShowCreate(true)} className="gap-2">
@@ -84,13 +87,25 @@ export default function BotsPage() {
             </Card>
           ))}
         </div>
-      ) : bots?.length === 0 ? (
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center py-32 gap-4 text-center">
+          <div className="h-20 w-20 rounded-2xl bg-red-50 dark:bg-red-950 flex items-center justify-center">
+            <AlertCircle className="h-10 w-10 text-red-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Error loading bots</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Something went wrong. Please try again.
+            </p>
+          </div>
+        </div>
+      ) : (bots ?? []).length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 gap-4 text-center">
           <div className="h-20 w-20 rounded-2xl bg-muted flex items-center justify-center">
             <Bot className="h-10 w-10 text-muted-foreground" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">Not bots yet</p>
+            <p className="font-semibold text-foreground">No bots yet</p>
             <p className="text-sm text-muted-foreground mt-1">
               Create your first chatbot and upload your documents
             </p>
@@ -126,7 +141,7 @@ export default function BotsPage() {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="primary" size="icon" className="h-8 w-8 -mr-1 -mt-1">
+                        <Button variant="secondary" size="icon" className="h-8 w-8 -mr-1 -mt-1">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -138,7 +153,7 @@ export default function BotsPage() {
                           Upload documents
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="text-red"
+                          className="text-red-500"
                           onClick={(e) => { e.stopPropagation(); deleteBot.mutate(bot.id); }}
                         >
                           Delete
@@ -208,6 +223,9 @@ export default function BotsPage() {
               <Label>Descripción <span className="text-muted-foreground">(opcional)</span></Label>
               <Input placeholder="Para qué sirve..." {...register('description')} />
             </div>
+            {createBot.isError && (
+              <p className="text-xs text-red-500">Error creating bot. Please try again.</p>
+            )}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="destroy" onClick={() => setShowCreate(false)}>
                 Cancelar
