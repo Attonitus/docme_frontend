@@ -26,9 +26,11 @@ export default function RootLayout({
       lang="en"
       className={cn("h-full", "antialiased", publicSans.variable)}
     >
-      <Providers>
-        <body>{children}</body>
-      </Providers>
-    </html>
+      <body>
+        <Providers>
+          {children}
+        </Providers>
+      </body>
+    </html >
   );
 }

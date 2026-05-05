@@ -23,7 +23,6 @@ export function useLoginMutation() {
   return useMutation({
     mutationFn: (data: LoginFormData) => login(data),
     onSuccess: () => router.replace('/overview'),
-    // El error queda en mutation.error — el componente lo muestra
   });
 }
 
@@ -35,9 +34,21 @@ export function useRegisterMutation() {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: (data: RegisterFormData) =>
-      register(data),
+    mutationFn: (data: RegisterFormData) => register(data),
     onSuccess: () => router.replace('/'),
+  });
+}
+
+// ──────────────────────────────────────────────
+// useLogoutMutation
+// ──────────────────────────────────────────────
+export function useLogoutMutation() {
+  const logout = useAuthStore((s) => s.logout);
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: () => logout(),
+    onSuccess: () => router.replace('/login'),
   });
 }
 

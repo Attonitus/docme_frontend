@@ -1,8 +1,8 @@
 'use client';
-import { getAccessToken } from '@/lib/api.axios';
+import { ensureAccessToken } from '@/lib/api.axios';
 import { MessageStream, SourceElement } from '@/types/types';
 import { useState, useCallback, useRef } from 'react';
- 
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
  
 interface UseChatOptions {
@@ -43,13 +43,25 @@ export const useChat = ({ conversationId, initialMessages = [] }: UseChatOptions
       setSources([]);
  
       abortRef.current = new AbortController();
- 
+
       try {
+        const token = await ensureAccessToken();
+        if (!token) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: '⚠️ Sesión expirada. Inicia sesión de nuevo.' }
+                : m,
+            ),
+          );
+          return;
+        }
+
         const response = await fetch(`${API_URL}/chat/stream`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${getAccessToken()}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ conversationId, content }),
           signal: abortRef.current.signal,

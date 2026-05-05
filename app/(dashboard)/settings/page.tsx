@@ -1,5 +1,6 @@
 'use client';
 import { useAuthStore } from '@/store/auth.store';
+import { useLogoutMutation } from '@/features/useAuthMutations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Shield, CreditCard, Building2, LogOut } from 'lucide-react';
+import { Shield, CreditCard, Building2, LogOut, Loader2 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const logoutMutation = useLogoutMutation();
   const org = user?.memberships?.[0]?.organization;
   const role = user?.memberships?.[0]?.role;
 
@@ -138,10 +140,15 @@ export default function SettingsPage() {
             <Button
               variant="destroy"
               size="sm"
-              onClick={logout}
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
               className="h-8 text-xs gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              {logoutMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <LogOut className="h-3.5 w-3.5" />
+              )}
               Salir
             </Button>
           </div>

@@ -40,12 +40,16 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as typeof error.config & { _retry?: boolean };
 
-    if (error.response?.status !== 401 || original._retry) {
+    // No intentar refresh si:
+    // - No es 401
+    // - Ya se reintentó
+    // - La request fallida ES el propio endpoint de refresh (evitar loop)
+    const isRefreshCall = original.url === '/auth/refresh';
+    if (error.response?.status !== 401 || original._retry || isRefreshCall) {
       return Promise.reject(error);
     }
 
     if (isRefreshing) {
-      // Si ya hay un refresh en curso, encolar este request
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       }).then((token) => {
@@ -72,8 +76,13 @@ api.interceptors.response.use(
       return api(original);
     } catch (refreshError) {
       processQueue(refreshError, null);
-      // El refresh falló — limpiar sesión y redirigir al login
       setAccessToken(null);
+      // Limpiar cookie para que el middleware redirija a /login
+      if (typeof document !== 'undefined') {
+        document.cookie = 'auth_session=; path=/; max-age=0';
+      }
+      // window.location.href es intencional: fuera de React no hay acceso al
+      // router de Next.js. Un full reload asegura limpiar todo el estado.
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
@@ -94,3 +103,19 @@ export const getAccessToken = () => _accessToken;
 export const setAccessToken = (token: string | null) => {
   _accessToken = token;
 };
+
+export async function ensureAccessToken(): Promise<string | null> {
+  if (_accessToken) return _accessToken;
+  try {
+    const { data } = await axios.post(
+      `${BASE_URL}/auth/refresh`,
+      {},
+      { withCredentials: true },
+    );
+    setAccessToken(data.accessToken);
+    return data.accessToken;
+  } catch {
+    setAccessToken(null);
+    return null;
+  }
+}
