@@ -1,105 +1,92 @@
 'use client';
-import { ensureAccessToken } from '@/lib/api.axios';
 import { MessageStream, SourceElement } from '@/types/types';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
- 
-interface UseChatOptions {
-  conversationId: string;
-  initialMessages?: MessageStream[];
+
+interface UseWidgetChatOptions {
+  apiKey: string;
+  conversationId: string | null;
 }
- 
-export const useChat = ({ conversationId, initialMessages = [] }: UseChatOptions) => {
-  const [messages, setMessages] = useState<MessageStream[]>(initialMessages);
+
+export const useWidgetChat = ({ apiKey, conversationId }: UseWidgetChatOptions) => {
+  const [messages, setMessages] = useState<MessageStream[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sources, setSources] = useState<SourceElement[]>([]);
   const abortRef = useRef<AbortController | null>(null);
-  const initializedRef = useRef(false);
 
-  useEffect(() => {
-    initializedRef.current = false;
-    setMessages([]);
-  }, [conversationId]);
-
-  useEffect(() => {
-    if (!initializedRef.current && initialMessages.length > 0) {
-      setMessages(initialMessages);
-      initializedRef.current = true;
-    }
-  }, [initialMessages]);
- 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (isStreaming) return;
- 
-      // 1. Agregar mensaje del usuario optimistamente
-      const userMsg = {
+      if (isStreaming || !conversationId) return;
+
+      const userMsg: MessageStream = {
         id: `tmp-${Date.now()}`,
         role: 'user',
         content,
         tokensUsed: 0,
         createdAt: new Date(),
       };
- 
-      // 2. Placeholder para la respuesta del assistant (streaming)
-      const assistantMsg = {
+
+      const assistantMsg: MessageStream = {
         id: `stream-${Date.now()}`,
         role: 'assistant',
         content: '',
         tokensUsed: 0,
         createdAt: new Date(),
       };
- 
+
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
       setSources([]);
-      initializedRef.current = true;
- 
+
       abortRef.current = new AbortController();
 
       try {
-        const token = await ensureAccessToken();
-        if (!token) {
+        const response = await fetch(`${API_URL}/chat/widget/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            conversationId,
+            content,
+          }),
+          signal: abortRef.current.signal,
+        });
+
+        if (!response.ok) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: '⚠️ Sesión expirada. Inicia sesión de nuevo.' }
+                ? { ...m, content: 'Error de conexión. Intenta de nuevo.' }
                 : m,
             ),
           );
           return;
         }
 
-        const response = await fetch(`${API_URL}/chat/stream`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ conversationId, content }),
-          signal: abortRef.current.signal,
-        });
- 
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
- 
+        let currentEvent = '';
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
- 
+
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
-          buffer = lines.pop() ?? ''; // la última línea puede estar incompleta
- 
+          buffer = lines.pop() ?? '';
+
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
               try {
                 const parsed = JSON.parse(line.slice(6));
- 
-                // Token — concatenar al mensaje del assistant
-                if (parsed.content !== undefined) {
+
+                if (currentEvent === 'token' && parsed.content !== undefined) {
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantMsg.id
@@ -108,29 +95,30 @@ export const useChat = ({ conversationId, initialMessages = [] }: UseChatOptions
                     ),
                   );
                 }
- 
-                // Sources — mostrar las fuentes encontradas
-                if (parsed.sources) {
+
+                if (currentEvent === 'sources' && parsed.sources) {
                   setSources(parsed.sources);
                 }
- 
-                // Done — actualizar el mensaje con el id real de DB
-                if (parsed.messageId) {
+
+                if (currentEvent === 'done') {
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantMsg.id
-                        ? { ...m, id: parsed.messageId, tokensUsed: parsed.tokensUsed }
+                        ? {
+                            ...m,
+                            id: parsed.messageId ?? m.id,
+                            tokensUsed: parsed.tokensUsed ?? 0,
+                          }
                         : m,
                     ),
                   );
                 }
- 
-                // Error
-                if (parsed.message && !parsed.messageId) {
+
+                if (currentEvent === 'error') {
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantMsg.id
-                        ? { ...m, content: '⚠️ ' + parsed.message }
+                        ? { ...m, content: parsed.message ?? 'Error desconocido.' }
                         : m,
                     ),
                   );
@@ -138,6 +126,8 @@ export const useChat = ({ conversationId, initialMessages = [] }: UseChatOptions
               } catch {
                 // línea SSE no es JSON válido, ignorar
               }
+            } else if (line === '') {
+              currentEvent = '';
             }
           }
         }
@@ -146,7 +136,7 @@ export const useChat = ({ conversationId, initialMessages = [] }: UseChatOptions
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: '⚠️ Error de conexión. Intenta de nuevo.' }
+                ? { ...m, content: 'Error de conexión. Intenta de nuevo.' }
                 : m,
             ),
           );
@@ -155,13 +145,13 @@ export const useChat = ({ conversationId, initialMessages = [] }: UseChatOptions
         setIsStreaming(false);
       }
     },
-    [conversationId, isStreaming],
+    [apiKey, conversationId, isStreaming],
   );
- 
+
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
     setIsStreaming(false);
   }, []);
- 
+
   return { messages, isStreaming, sources, sendMessage, stopStreaming };
 };

@@ -26,7 +26,7 @@ export default function WidgetPage() {
   const [copied, setCopied] = useState(false);
 
   const selectedBot = bots?.find((b: BotType) => b.id === selectedBotId) ?? bots?.[0];
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+  const apiUrl = process.env.BACKEND_BASE_URL ?? 'http://localhost:3001/api';
   const widgetUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/widget/${selectedBot?.id}`
     : '';
